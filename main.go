@@ -16,7 +16,7 @@ import (
 	"syscall"
 )
 
-const workerCount = 20
+const workerCount = 15
 const processorCount = 0
 const bufferSize = 1000
 
@@ -86,13 +86,17 @@ func responseBroker() {
 			activity <- struct{}{}
 			// process resp
 			debug("Response processed")
+			bs, _ := ioutil.ReadAll(resp.Body)
+			debug(string(bs))
 			for i := 1; i <= 2; i++ {
 				req, _ := http.NewRequest("GET", resp.Request.URL.String(), nil)
 				select {
+				case finish <- struct{}{}:
+					debug("broker broke")
+					return
 				case reqQ <- req:
-				case <-time.After(time.Millisecond * 30):
-					debug("Request lost")
 				}
+
 			}
 		}
 	}
@@ -114,7 +118,13 @@ func httpClient(id int) {
 					continue
 				}
 				debug("Worker ", strconv.Itoa(id), ": download completed ", req.URL.String())
-				respQ <- resp
+				select {
+				case finish <- struct{}{}:
+					debug("client broke")
+					return
+				case respQ <- resp:
+				}
+
 			} else {
 				debug("Worker ", strconv.Itoa(id), ": reqQ is empty and closed")
 				return
@@ -123,12 +133,13 @@ func httpClient(id int) {
 	}
 }
 
-var cleanup = func() {
+func cleanup() {
 	debug("cleaning up")
 	for {
 		select {
 		case <-finish:
-			continue
+		case <-reqQ:
+		case <-respQ:
 		case <-time.After(time.Second * 10):
 			close(reqQ)
 			close(respQ)
@@ -151,9 +162,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	c := make(chan os.Signal, 2)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-
 	// Init internal resources and data structures
 	LogInit(debugMode)
 	activity = make(chan struct{})
@@ -167,6 +175,8 @@ func main() {
 		Jar:     jar,
 	}
 
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
 		debug("signal")
