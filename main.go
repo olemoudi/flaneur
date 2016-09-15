@@ -4,6 +4,7 @@ import (
 	"flag"
 	"io"
 	"io/ioutil"
+	"sync"
 	//"fmt"
 	"log"
 	"os"
@@ -12,27 +13,36 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"syscall"
 )
 
-const workerCount = 15
-const processorCount = 0
+const workerCount = 20
+const processorCount = 1
 const bufferSize = 1000
 
 var (
-	infoLog   *log.Logger
-	debugLog  *log.Logger
-	debugMode bool
-	url       string
-	reqQ      chan *http.Request
-	respQ     chan *http.Response
-	processQ  chan *http.Response
-	allDone   chan bool
-	activity  chan struct{}
-	finish    chan struct{}
-	client    *http.Client
+	infoLog          *log.Logger
+	debugLog         *log.Logger
+	debugMode        bool
+	url              string
+	links            chan string
+	allDone          chan bool
+	activity         chan struct{}
+	exiting          chan struct{}
+	watchdog         chan struct{}
+	client           *http.Client
+	wg               sync.WaitGroup
+	activityWatchdog bool
 )
+
+func ping() {
+	select {
+	case activity <- struct{}{}:
+	default:
+	}
+}
 
 func info(msg ...string) {
 	s := make([]interface{}, len(msg))
@@ -48,6 +58,117 @@ func debug(msg ...string) {
 		s[i] = v
 	}
 	debugLog.Println(s...)
+}
+
+func cleanup() {
+	debug("cleaning up")
+	close(exiting)
+	wg.Wait()
+	close(downloadOutputQ)
+	close(reqFilterInputQ)
+	close(reqFilterOutputQ)
+	allDone <- true
+}
+
+func main() {
+	flag.StringVar(&url, "u", "", "Base URL")
+	flag.BoolVar(&debugMode, "debug", false, "log additional debug traces")
+
+	flag.Parse()
+
+	if url == "" {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	// Init internal resources and data structures
+	LogInit(debugMode)
+	activity = make(chan struct{})
+	allDone = make(chan bool)
+	exiting = make(chan struct{})
+	watchdog = make(chan struct{})
+
+	timeout := time.Duration(5 * time.Second)
+	jar, _ := cookiejar.New(nil)
+	client = &http.Client{
+		Timeout: timeout,
+		Jar:     jar,
+	}
+
+	initSignals()
+
+	// Launch Stages
+
+	// Request Filter Stage
+	wg.Add(1)
+	go reqFilterPipeline(1)
+
+	// Download Stage
+	for id := 1; id <= workerCount; id++ {
+		wg.Add(1)
+		go httpClient(id)
+	}
+
+	// Response Processing Stage
+
+	for id := 1; id <= processorCount; id++ {
+		wg.Add(1)
+		go responseProcessor(id)
+	}
+
+	// out queue
+
+	// launch response broker
+	//go responseBroker()
+	// out queue
+	//processQ = make(chan *http.Response, 1000)
+
+	// launch response processors
+
+	// seed start URL
+	for i := 1; i <= workerCount; i++ {
+		req, _ := http.NewRequest("GET", url, nil)
+		reqFilterInputQ <- req
+	}
+
+	// sync workers
+	<-allDone
+
+	// Wait for exiting
+
+	info("info test")
+	debug("debug test")
+
+}
+
+func initSignals() {
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		debug("signal")
+		cleanup()
+	}()
+
+	go func() {
+		doWork := true
+		for doWork {
+			select {
+			case <-activity:
+				debug("goroutines: ", strconv.Itoa(runtime.NumGoroutine()))
+			case <-exiting:
+				debug("watchdog exiting")
+				doWork = false
+			case <-time.After(time.Second * 30):
+				debug("no activity")
+				//var once sync.Once
+				//once.Do(cleanup)
+				cleanup()
+			}
+		}
+		return
+	}()
+
 }
 
 func LogInit(debug_flag bool) {
@@ -73,164 +194,5 @@ func LogInit(debug_flag bool) {
 	}
 
 	infoLog = log.New(infowriter, "", log.Ldate|log.Ltime)
-
-}
-
-func responseBroker() {
-	for {
-		select {
-		case finish <- struct{}{}:
-			debug("broker broke")
-			return
-		case resp := <-respQ:
-			activity <- struct{}{}
-			// process resp
-			debug("Response processed")
-			bs, _ := ioutil.ReadAll(resp.Body)
-			debug(string(bs))
-			for i := 1; i <= 2; i++ {
-				req, _ := http.NewRequest("GET", resp.Request.URL.String(), nil)
-				select {
-				case finish <- struct{}{}:
-					debug("broker broke")
-					return
-				case reqQ <- req:
-				}
-
-			}
-		}
-	}
-}
-
-func httpClient(id int) {
-	for {
-		select {
-		case finish <- struct{}{}:
-			debug("client broke")
-			return
-		case req, more := <-reqQ:
-			activity <- struct{}{}
-			if more {
-				debug("Worker ", strconv.Itoa(id), ": downloading ", req.URL.String())
-				resp, err := client.Do(req)
-				if err != nil {
-					debug("Worker ", strconv.Itoa(id), ": error downloading ", req.URL.String())
-					continue
-				}
-				debug("Worker ", strconv.Itoa(id), ": download completed ", req.URL.String())
-				select {
-				case finish <- struct{}{}:
-					debug("client broke")
-					return
-				case respQ <- resp:
-				}
-
-			} else {
-				debug("Worker ", strconv.Itoa(id), ": reqQ is empty and closed")
-				return
-			}
-		}
-	}
-}
-
-func cleanup() {
-	debug("cleaning up")
-	for {
-		select {
-		case <-finish:
-		case <-reqQ:
-		case <-respQ:
-		case <-time.After(time.Second * 10):
-			close(reqQ)
-			close(respQ)
-			allDone <- true
-			return
-		}
-	}
-}
-
-func responseProcessor(id int) {
-}
-func main() {
-	flag.StringVar(&url, "u", "", "Base URL")
-	flag.BoolVar(&debugMode, "debug", false, "log additional debug traces")
-
-	flag.Parse()
-
-	if url == "" {
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	// Init internal resources and data structures
-	LogInit(debugMode)
-	activity = make(chan struct{})
-	allDone = make(chan bool)
-	finish = make(chan struct{}, 1)
-	finish <- struct{}{}
-	timeout := time.Duration(5 * time.Second)
-	jar, _ := cookiejar.New(nil)
-	client = &http.Client{
-		Timeout: timeout,
-		Jar:     jar,
-	}
-
-	c := make(chan os.Signal, 2)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		debug("signal")
-		cleanup()
-	}()
-
-	// Launch pool of http clients
-	// in queue
-	reqQ = make(chan *http.Request, bufferSize)
-	for id := 1; id <= workerCount; id++ {
-		go httpClient(id)
-	}
-	// out queue
-	respQ = make(chan *http.Response, bufferSize)
-
-	// launch response broker
-	go responseBroker()
-	// out queue
-	processQ = make(chan *http.Response, 100)
-
-	// launch response processors
-	for id := 1; id <= processorCount; id++ {
-		go responseProcessor(id)
-	}
-
-	// seed start URL
-	for i := 1; i <= workerCount; i++ {
-		req, _ := http.NewRequest("GET", url, nil)
-		reqQ <- req
-	}
-
-	// launch done watchdog
-	go func() {
-		for {
-			select {
-			case finish <- struct{}{}:
-				return
-			case <-activity:
-			case <-time.After(time.Second * 30):
-				debug("no activity")
-				//var once sync.Once
-				//once.Do(cleanup)
-				cleanup()
-				return
-			}
-		}
-	}()
-
-	// sync workers
-	<-allDone
-
-	// Wait for finish
-
-	info("info test")
-	debug("debug test")
 
 }
