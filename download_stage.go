@@ -7,43 +7,42 @@ import (
 //var httpConfig = make(chan *HTTPConfig)
 
 func httpClient(id int) {
-	loop:
-		for {
-			select {
-			case <-exiting:
-				debug("Worker ", strconv.Itoa(id), "exiting")
-				break loop
-			case req, more := <-reqFilterOutputQ:
-				ping()
-				if more {
-					debug("Worker ", strconv.Itoa(id), ": downloading ", req.URL.String())
-					resp, err := client.Do(req)
-					if err != nil {
-						debug("Worker ", strconv.Itoa(id), ": error downloading ", req.URL.String(), "(", err.Error(), ")")
-						continue
-					}
-					debug("Worker ", strconv.Itoa(id), ": download completed ", req.URL.String())
-					ping()
-					select {
-					case <-exiting:
-						debug("Worker ", strconv.Itoa(id), "exiting")
-						break loop
-					case downloadOutputQ <- resp:
-						debug("response queued for processing")
-						ping()
-					default:
-						// DO NOT BLOCK HTTP CLIENTS
-						debug("Response was lost (nobody there to pick it)")
-					}
-
-				} else {
-					debug("Worker ", strconv.Itoa(id), ": request queue is empty and closed")
-					break loop
+	defer wg.Done()
+loop:
+	for {
+		select {
+		case <-exiting:
+			debug("Worker ", strconv.Itoa(id), "exiting")
+			break loop
+		case req, more := <-reqFilterOutputQ:
+			ping()
+			if more {
+				debug("Worker ", strconv.Itoa(id), ": downloading ", req.URL.String())
+				resp, err := client.Do(req)
+				if err != nil {
+					debug("Worker ", strconv.Itoa(id), ": error downloading ", req.URL.String(), "(", err.Error(), ")")
+					continue
 				}
-				//case config <- httpConfig:
-			}
-		}
+				debug("Worker ", strconv.Itoa(id), ": download completed ", req.URL.String())
+				ping()
+				select {
+				case <-exiting:
+					debug("Worker ", strconv.Itoa(id), "exiting")
+					break loop
+				case downloadOutputQ <- resp:
+					debug("response queued for processing")
+					ping()
+				default:
+					// DO NOT BLOCK HTTP CLIENTS
+					debug("Response was lost (nobody there to pick it)")
+				}
 
-	wg.Done()
+			} else {
+				debug("Worker ", strconv.Itoa(id), ": request queue is empty and closed")
+				break loop
+			}
+			//case config <- httpConfig:
+		}
+	}
 	return
 }

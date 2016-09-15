@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"sync"
@@ -18,29 +19,51 @@ import (
 	"syscall"
 )
 
+const banner = `
+######## ##          ###    ##    ## ######## ##     ## ########
+##       ##         ## ##   ###   ## ##       ##     ## ##     ##
+##       ##        ##   ##  ####  ## ##       ##     ## ##     ##
+######   ##       ##     ## ## ## ## ######   ##     ## ########
+##       ##       ######### ##  #### ##       ##     ## ##   ##
+##       ##       ##     ## ##   ### ##       ##     ## ##    ##
+##       ######## ##     ## ##    ## ########  #######  ##     ##
+
+
+`
+
 const workerCount = 20
-const processorCount = 1
 const bufferSize = 1000
 
 var (
 	infoLog          *log.Logger
 	debugLog         *log.Logger
 	debugMode        bool
+	serverMode       bool
 	url              string
 	activity         chan struct{}
 	exiting          chan struct{}
-	reqFilterInputQ 	chan *http.Request
-	reqFilterOutputQ	chan *http.Request
-	downloadOutputQ		chan *http.Response
+	reqFilterInputQ  chan *http.Request
+	reqFilterOutputQ chan *http.Request
+	downloadOutputQ  chan *http.Response
 	client           *http.Client
 	wg               sync.WaitGroup
 )
 
 func main() {
+	fmt.Println(banner)
 	flag.StringVar(&url, "u", "", "Base URL")
 	flag.BoolVar(&debugMode, "debug", false, "log additional debug traces")
+	flag.BoolVar(&serverMode, "server", false, "launch testing server")
 
 	flag.Parse()
+
+	LogInit(debugMode)
+
+	if serverMode {
+		launchServer()
+		//initSignals()
+		os.Exit(1)
+	}
 
 	if url == "" {
 		flag.Usage()
@@ -48,22 +71,23 @@ func main() {
 	}
 
 	// Init internal resources and data structures
-	LogInit(debugMode)
+
 	activity = make(chan struct{})
 	exiting = make(chan struct{})
-
 	timeout := time.Duration(5 * time.Second)
 	jar, _ := cookiejar.New(nil)
 	client = &http.Client{
 		Timeout: timeout,
 		Jar:     jar,
 	}
-
 	initSignals()
+	initWatchdog()
 
- // Launch Stages
+	// Launch Stages
 
 	// Request Filter Stage
+	// reqFilterInputQ--->[]--->[]-->. . . . . -->[]--->reqFilterOutputQ
+
 	reqFilterInputQ = make(chan *http.Request, bufferSize)
 	reqFilterOutputQ = make(chan *http.Request, bufferSize)
 	wg.Add(1)
@@ -76,10 +100,8 @@ func main() {
 		go httpClient(id)
 	}
 	// Response Processing Stage
-	for id := 1; id <= processorCount; id++ {
-		wg.Add(1)
-		go responseProcessor(id)
-	}
+	wg.Add(1)
+	go responseProcessor(1)
 
 	// out queue
 
@@ -109,8 +131,8 @@ func main() {
 
 }
 
-func broadcastExit(origin string) {
-	debug("broadcasting exit from ", origin)
+func broadcastExit(msg string) {
+	debug("broadcasting exit from", msg)
 	close(exiting)
 }
 
@@ -128,7 +150,8 @@ func initSignals() {
 		wg.Done()
 		return
 	}()
-
+}
+func initWatchdog() {
 	wg.Add(1)
 	go func() {
 		doWork := true
