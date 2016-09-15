@@ -12,39 +12,39 @@ const extractorCount = 10
 
 func responseProcessor(id int) {
 
-	for i := 0; i <= extractorCount; i++ {
+	for i := 1; i <= extractorCount; i++ {
 		wg.Add(1)
 		go extractLinks()
 	}
-	var doWork = true
-	for doWork {
-		select {
-		case <-exiting:
-			debug("processor exiting")
-			doWork = false
-		case <-time.After(time.Second * 5):
-			continue // TODO: here goes the fan out
+	loop:
+		for {
+			select {
+			case <-exiting:
+				debug("processor exiting")
+				break loop
+			case <-time.After(time.Second * 5):
+				continue loop// TODO: here goes the fan out
+
+			}
+			ping()
 
 		}
-		ping()
-
-	}
 	wg.Done()
 	return
 }
 
 func extractLinks() {
-	var extract = true
-	for extract {
-		select {
-		case <-exiting:
-			debug("link extractor exiting")
-			extract = false // break for
-		case resp := <-downloadOutputQ:
-			ping()
-			extractLinksF(resp)
+	loop:
+		for  {
+			select {
+			case <-exiting:
+				debug("link extractor exiting")
+				break loop
+			case resp := <-downloadOutputQ:
+				ping()
+				extractLinksF(resp)
+			}
 		}
-	}
 	wg.Done()
 	return
 
@@ -52,6 +52,15 @@ func extractLinks() {
 
 func extractLinksF(resp *http.Response) {
 	debug("extracting links")
+	req, err := http.NewRequest("GET", "http://localhost:8000", nil)
+	if err == nil {
+		select {
+		case reqFilterInputQ <- req:
+		default:
+			//case <-time.After(time.Millisecond * 0.5):
+			//debug("link lost")
+		}
+}
 	/*for i := 1; i <= 1; i++ {
 		*output <- resp.Request.URL.String()
 	}*/
@@ -93,8 +102,9 @@ func extractLinksF(resp *http.Response) {
 					}
 				}
 			}
-		}
+
 	}
+}
 }
 
 // Helper function to pull the href attribute from a Token

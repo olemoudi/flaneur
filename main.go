@@ -27,48 +27,14 @@ var (
 	debugLog         *log.Logger
 	debugMode        bool
 	url              string
-	links            chan string
-	allDone          chan bool
 	activity         chan struct{}
 	exiting          chan struct{}
-	watchdog         chan struct{}
+	reqFilterInputQ 	chan *http.Request
+	reqFilterOutputQ	chan *http.Request
+	downloadOutputQ		chan *http.Response
 	client           *http.Client
 	wg               sync.WaitGroup
-	activityWatchdog bool
 )
-
-func ping() {
-	select {
-	case activity <- struct{}{}:
-	default:
-	}
-}
-
-func info(msg ...string) {
-	s := make([]interface{}, len(msg))
-	for i, v := range msg {
-		s[i] = v
-	}
-	infoLog.Println(s...)
-}
-
-func debug(msg ...string) {
-	s := make([]interface{}, len(msg))
-	for i, v := range msg {
-		s[i] = v
-	}
-	debugLog.Println(s...)
-}
-
-func cleanup() {
-	debug("cleaning up")
-	close(exiting)
-	wg.Wait()
-	close(downloadOutputQ)
-	close(reqFilterInputQ)
-	close(reqFilterOutputQ)
-	allDone <- true
-}
 
 func main() {
 	flag.StringVar(&url, "u", "", "Base URL")
@@ -84,9 +50,7 @@ func main() {
 	// Init internal resources and data structures
 	LogInit(debugMode)
 	activity = make(chan struct{})
-	allDone = make(chan bool)
 	exiting = make(chan struct{})
-	watchdog = make(chan struct{})
 
 	timeout := time.Duration(5 * time.Second)
 	jar, _ := cookiejar.New(nil)
@@ -97,20 +61,21 @@ func main() {
 
 	initSignals()
 
-	// Launch Stages
+ // Launch Stages
 
 	// Request Filter Stage
+	reqFilterInputQ = make(chan *http.Request, bufferSize)
+	reqFilterOutputQ = make(chan *http.Request, bufferSize)
 	wg.Add(1)
 	go reqFilterPipeline(1)
 
 	// Download Stage
+	downloadOutputQ = make(chan *http.Response, bufferSize)
 	for id := 1; id <= workerCount; id++ {
 		wg.Add(1)
 		go httpClient(id)
 	}
-
 	// Response Processing Stage
-
 	for id := 1; id <= processorCount; id++ {
 		wg.Add(1)
 		go responseProcessor(id)
@@ -132,7 +97,10 @@ func main() {
 	}
 
 	// sync workers
-	<-allDone
+	wg.Wait()
+	close(downloadOutputQ)
+	close(reqFilterInputQ)
+	close(reqFilterOutputQ)
 
 	// Wait for exiting
 
@@ -141,15 +109,27 @@ func main() {
 
 }
 
+func broadcastExit(origin string) {
+	debug("broadcasting exit from ", origin)
+	close(exiting)
+}
+
 func initSignals() {
 	c := make(chan os.Signal, 2)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	wg.Add(1)
 	go func() {
-		<-c
-		debug("signal")
-		cleanup()
+		select {
+		case <-c:
+			debug("close exiting because of signal")
+			broadcastExit("Interrupt/SIGTERM Signal")
+		case <-exiting:
+		}
+		wg.Done()
+		return
 	}()
 
+	wg.Add(1)
 	go func() {
 		doWork := true
 		for doWork {
@@ -159,17 +139,29 @@ func initSignals() {
 			case <-exiting:
 				debug("watchdog exiting")
 				doWork = false
-			case <-time.After(time.Second * 30):
+			case <-time.After(time.Second * 10):
 				debug("no activity")
 				//var once sync.Once
 				//once.Do(cleanup)
-				cleanup()
+				debug("close exiting because of inactivity")
+				broadcastExit("Idle Timeout")
+				doWork = false
 			}
 		}
+		wg.Done()
 		return
 	}()
 
 }
+
+/*
+/////////////////////////
+/////////////////////////
+UTLIITY FUNCTIONS
+/////////////////////////
+/////////////////////////
+
+*/
 
 func LogInit(debug_flag bool) {
 	logfile, err := os.OpenFile("vito.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
@@ -195,4 +187,27 @@ func LogInit(debug_flag bool) {
 
 	infoLog = log.New(infowriter, "", log.Ldate|log.Ltime)
 
+}
+
+func ping() {
+	select {
+	case activity <- struct{}{}:
+	default:
+	}
+}
+
+func info(msg ...string) {
+	s := make([]interface{}, len(msg))
+	for i, v := range msg {
+		s[i] = v
+	}
+	infoLog.Println(s...)
+}
+
+func debug(msg ...string) {
+	s := make([]interface{}, len(msg))
+	for i, v := range msg {
+		s[i] = v
+	}
+	debugLog.Println(s...)
 }

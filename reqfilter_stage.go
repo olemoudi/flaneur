@@ -2,22 +2,29 @@ package main
 
 import "net/http"
 
-var reqFilterInputQ = make(chan *http.Request, bufferSize)
-var reqFilterOutputQ = make(chan *http.Request, bufferSize)
-
 func reqFilterPipeline(id int) {
-	var doWork = true
-	for doWork {
-		select {
-		case <-exiting:
-			debug("ReqFilter Pipeline exiting")
-			doWork = false
-		default:
-			req := <-reqFilterInputQ
-			reqFilterOutputQ <- req
-			ping()
+	loop:
+		for  {
+			select {
+			case <-exiting:
+				debug("ReqFilter Pipeline exiting")
+				break loop
+			default:
+				var req *http.Request
+
+				select {
+				case req = <- reqFilterInputQ:
+				default:
+					continue loop
+				}
+				select {
+				case reqFilterOutputQ <- req:
+				default:
+				continue loop
+			}
+				ping()
+			}
 		}
-	}
 
 	wg.Done()
 	return
