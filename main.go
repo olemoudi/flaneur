@@ -33,6 +33,7 @@ const banner = `
 
 const workerCount = 20
 const bufferSize = 1000
+const reqCooldown = 5 // secs
 
 var (
 	infoLog          *log.Logger
@@ -47,6 +48,7 @@ var (
 	downloadOutputQ  chan *http.Response
 	client           *http.Client
 	wg               sync.WaitGroup
+	originTime       map[string]int64
 )
 
 func main() {
@@ -80,6 +82,7 @@ func main() {
 		Timeout: timeout,
 		Jar:     jar,
 	}
+	originTime = make(map[string]int64)
 	initSignals()
 	initWatchdog()
 
@@ -162,7 +165,7 @@ func initWatchdog() {
 			case <-exiting:
 				debug("watchdog exiting")
 				doWork = false
-			case <-time.After(time.Second * 10):
+			case <-time.After(time.Second * 300):
 				debug("no activity")
 				//var once sync.Once
 				//once.Do(cleanup)
