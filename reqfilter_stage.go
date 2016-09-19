@@ -6,8 +6,64 @@ import (
 	"time"
 )
 
+type pipelineStage struct {
+	in     chan *http.Request
+	inBypass chan *http.Request
+	out    chan *http.Request
+	outBypass	chan *http.Request
+	name   string
+	f      func(*http.Request) chan *http.Request
+}
+
+func createPipelineStage(stageName string, fu func(*http.Request) chan *http.Request) pipelineStage {
+	inChan := make(chan *http.Request)
+	inChanBypass := make(chan *http.Request)
+	outChan := make(chan *http.Request)
+	outChanBypass := make(chan *http.Request)
+	stage = pipelineStage { in : inChan, bypass : bypassChan, out: outChan, name : stageName, f: fu}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		loop:
+			for {
+				select {
+				case <-exiting:
+					break loop
+				case req <-bypass:
+					select {
+						case outReq
+					}
+				case req<- stage.in:
+					select {
+					case outReq <- stage.f(req):
+					case <-time.After(Time.Seconds*1):
+
+					}
+				}
+			}
+
+	}
+	return pipelineStage{}
+}
+
+func (a *pipelineStage) connectPipeline(b *pipelineStage) pipelineStage {
+
+}
+
+func (p *pipelineStage) send(req *http.Request) {
+
+	select {
+	case p.in <- req:
+	default:
+		debug(p.name, "bypassed")
+		p.out <- req
+	}
+
+}
+
 func reqFilterPipeline(id int) {
 	defer wg.Done()
+
 loop:
 	for {
 		select {
