@@ -26,18 +26,22 @@ loop:
 				now := time.Now()
 				secs := now.Unix()
 				debug("Next in:", strconv.Itoa(int((reqCooldown - (secs - lastTime)))))
-				wg.Add(1)
-				time.AfterFunc(time.Duration((reqCooldown-(secs-lastTime)))*time.Second, func() {
-					defer wg.Done()
-					debug("afterfunc")
-					select {
-					case <-exiting:
-					case reqFilterOutputQ <- req:
-						ping()
-					default:
-					}
 
-				})
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					select {
+					case <-time.After(time.Duration((reqCooldown - (secs - lastTime))) * time.Second):
+						select {
+						case reqFilterOutputQ <- req:
+							ping()
+						default:
+						}
+					case <-exiting:
+						//debug("cancelling request at", strconv.Itoa(int((reqCooldown - (secs - lastTime)))))
+					}
+				}()
+
 				originTime[req.URL.Host] = lastTime + reqCooldown
 
 			default:

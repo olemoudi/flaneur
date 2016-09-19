@@ -33,7 +33,7 @@ const banner = `
 
 const workerCount = 20
 const bufferSize = 1000
-const reqCooldown = 5 // secs
+const reqCooldown = 1 // secs
 
 var (
 	infoLog          *log.Logger
@@ -190,14 +190,14 @@ UTLIITY FUNCTIONS
 */
 
 func LogInit(debug_flag bool) {
-	logfile, err := os.OpenFile("vito.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	logfile, err := os.OpenFile("/tmp/vito.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatal("Error opening log file")
 	}
 	infowriter := io.MultiWriter(logfile, os.Stdout)
 
 	if debug_flag {
-		debuglogfile, err := os.OpenFile("vito.debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		debuglogfile, err := os.OpenFile("/tmp/vito.debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err != nil {
 			log.Fatal("Error opening debug log file")
 		}
