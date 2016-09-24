@@ -14,8 +14,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"os/signal"
-	"runtime"
-	"strconv"
 	"syscall"
 )
 
@@ -31,9 +29,9 @@ const banner = `
 
 `
 
-const workerCount = 20
+const workerCount = 60
 const bufferSize = 1000
-const reqCooldown = 1 // secs
+const reqCooldown = 5 // secs
 
 var (
 	infoLog          *log.Logger
@@ -116,6 +114,7 @@ func main() {
 	// launch response processors
 
 	// seed start URL
+	<-time.After(time.Second)
 	for i := 1; i <= workerCount; i++ {
 		req, _ := http.NewRequest("GET", url, nil)
 		reqFilterInputQ <- req
@@ -161,7 +160,7 @@ func initWatchdog() {
 		for doWork {
 			select {
 			case <-activity:
-				debug("goroutines: ", strconv.Itoa(runtime.NumGoroutine()))
+				//debug("goroutines: ", strconv.Itoa(runtime.NumGoroutine()))
 			case <-exiting:
 				debug("watchdog exiting")
 				doWork = false
