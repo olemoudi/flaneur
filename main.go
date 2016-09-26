@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"strings"
 	"sync"
 	//"fmt"
 	"log"
@@ -29,7 +30,7 @@ const banner = `
 
 `
 
-const workerCount = 60
+const workerCount = 50
 const bufferSize = 1000
 const reqCooldown = 5 // secs
 
@@ -39,6 +40,7 @@ var (
 	debugMode        bool
 	serverMode       bool
 	url              string
+	scope            string
 	activity         chan struct{}
 	exiting          chan struct{}
 	reqFilterInputQ  chan *http.Request
@@ -47,6 +49,8 @@ var (
 	client           *http.Client
 	wg               sync.WaitGroup
 	originTime       map[string]int64
+	originTimeMutex  *sync.Mutex
+	seen             map[string]interface{}
 )
 
 func main() {
@@ -73,6 +77,7 @@ func main() {
 	// Init internal resources and data structures
 
 	activity = make(chan struct{})
+	originTimeMutex = &sync.Mutex{}
 	exiting = make(chan struct{})
 	timeout := time.Duration(5 * time.Second)
 	jar, _ := cookiejar.New(nil)
@@ -81,6 +86,7 @@ func main() {
 		Jar:     jar,
 	}
 	originTime = make(map[string]int64)
+	seen = make(map[string]interface{})
 	initSignals()
 	initWatchdog()
 
@@ -114,6 +120,9 @@ func main() {
 	// launch response processors
 
 	// seed start URL
+	req, _ := http.NewRequest("GET", url, nil)
+	tokens := strings.Split(req.URL.Host, ".")
+	scope = "." + strings.Join(tokens[len(tokens)-2:], ".")
 	<-time.After(time.Second)
 	for i := 1; i <= workerCount; i++ {
 		req, _ := http.NewRequest("GET", url, nil)
@@ -133,6 +142,24 @@ func main() {
 
 }
 
+//TODO: wg.Wait() timeout
+/*
+// waitTimeout waits for the waitgroup for the specified max timeout.
+// Returns true if waiting timed out.
+func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
+    c := make(chan struct{})
+    go func() {
+        defer close(c)
+        wg.Wait()
+    }()
+    select {
+    case <-c:
+        return false // completed normally
+    case <-time.After(timeout):
+        return true // timed out
+    }
+}
+*/
 func broadcastExit(msg string) {
 	debug("broadcasting exit from", msg)
 	close(exiting)

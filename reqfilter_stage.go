@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -16,8 +17,8 @@ type pipelineStage struct {
 }
 
 func (p *pipelineStage) init(name string, f func(*http.Request) *http.Request) {
-	p.in = make(chan *http.Request)
-	p.out = make(chan *http.Request)
+	p.in = make(chan *http.Request, 100)
+	p.out = make(chan *http.Request, 100)
 	p.inner = make(chan *http.Request, 100)
 	p.name = name
 	p.f = f
@@ -128,43 +129,67 @@ loop:
 			debug("ReqFilter Pipeline exiting")
 			break loop
 		case req := <-reqFilterInputQ:
+			if !strings.HasSuffix(req.URL.Host, scope) || req.URL.Host == scope {
+				continue loop
+			}
+			_, dup := seen[req.URL.String()]
+			if dup {
+				continue loop
+			}
+			seen[req.URL.String()] = struct{}{}
 			select {
 			case pipelineInputQ <- req:
-			case <-time.After(time.Millisecond * 5):
-				debug("req lost by reqFilterPipeline main loop")
-			default:
+				/*
+					case <-time.After(time.Millisecond * 5):
+						debug("req lost by reqFilterPipeline main loop")
+					default:
+				*/
 			}
 
 		case req := <-pipelineOutQ:
-			lastTime := originTime[req.URL.Host]
-			if lastTime == 0 {
-				lastTime = time.Now().Unix()
-			}
-			now := time.Now()
-			secs := now.Unix()
-
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				select {
-				case <-time.After(time.Duration((reqCooldown - (secs - lastTime))) * time.Second):
-					select {
-					case reqFilterOutputQ <- req:
-						ping()
-					default:
-						debug("req lost by scheduled goroutine")
-					}
-				case <-exiting:
-					//debug("cancelling request at", strconv.Itoa(int((reqCooldown - (secs - lastTime)))))
-				}
-			}()
-
-			originTime[req.URL.Host] = lastTime + reqCooldown
-
-		default:
-			continue loop
-
+			scheduleRequest(req)
 		}
 	}
 	return
+}
+
+func scheduleRequest(req *http.Request) {
+	originTimeMutex.Lock()
+	lastTime := originTime[req.URL.Host]
+	originTimeMutex.Unlock()
+	if lastTime == 0 {
+		lastTime = time.Now().Unix()
+	}
+	now := time.Now()
+	secs := now.Unix()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+	loop:
+		for {
+			select {
+			case <-time.After(time.Duration((reqCooldown - (secs - lastTime))) * time.Second):
+				//originTimeMutex.Lock()
+				//if originTime[req.URL.Host] - lastTime < reqCooldown
+				//originTimeMutex.Unlock()
+
+				select {
+				case reqFilterOutputQ <- req:
+					ping()
+					break loop
+				default:
+					debug("req lost by scheduled goroutine")
+					break loop
+				}
+			case <-exiting:
+				//debug("cancelling request at", strconv.Itoa(int((reqCooldown - (secs - lastTime)))))
+				break loop
+			}
+
+		}
+	}()
+	originTimeMutex.Lock()
+	originTime[req.URL.Host] = lastTime + reqCooldown
+	originTimeMutex.Unlock()
 }

@@ -50,18 +50,19 @@ loop:
 
 func extractLinksF(resp *http.Response) {
 	debug("extracting links")
-	req, err := http.NewRequest("GET", "http://localhost:8000", nil)
-	if err == nil {
-		select {
-		case reqFilterInputQ <- req:
-		default:
-			//case <-time.After(time.Millisecond * 0.5):
-			//debug("link lost")
+	/*
+		req, err := http.NewRequest("GET", "http://localhost:8000", nil)
+		if err == nil {
+			select {
+			case reqFilterInputQ <- req:
+			default:
+				//case <-time.After(time.Millisecond * 0.5):
+				//debug("link lost")
+			}
 		}
-	}
-	/*for i := 1; i <= 1; i++ {
-		*output <- resp.Request.URL.String()
-	}*/
+		/*for i := 1; i <= 1; i++ {
+			*output <- resp.Request.URL.String()
+		}*/
 
 	z := html.NewTokenizer(resp.Body)
 
