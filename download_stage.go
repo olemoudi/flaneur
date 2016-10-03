@@ -16,6 +16,7 @@ loop:
 			ping()
 			if more {
 				//debug("Worker ", strconv.Itoa(id), ": downloading ", req.URL.String())
+				req.Header.Add("User-Agent", "Firefox")
 				resp, err := client.Do(req)
 				if err != nil {
 					debug("Worker ", strconv.Itoa(id), ": error downloading ", req.URL.String(), "(", err.Error(), ")")

@@ -8,6 +8,11 @@ import (
 )
 
 type pipelineStage struct {
+	/*
+		in --- ---> inner -->f() ---> out
+			  |                    ^
+			  -------->------------
+	*/
 	in      chan *http.Request
 	out     chan *http.Request
 	inner   chan *http.Request
@@ -25,41 +30,12 @@ func (p *pipelineStage) init(name string, f func(*http.Request) *http.Request) {
 	p.Started = false
 }
 
-func connectPipelineStages(pfirst, psecond pipelineStage) (chan *http.Request, chan *http.Request) {
-
-	if !pfirst.Started {
-		pfirst.start()
-	}
-	if !psecond.Started {
-		psecond.start()
-	}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-	loop:
-		for {
-			select {
-			case <-exiting:
-				break loop
-			case req := <-pfirst.out:
-				select {
-				case psecond.in <- req:
-				default:
-					debug("request lost by pipeline connector")
-				}
-			}
-		}
-	}()
-
-	return pfirst.in, psecond.out
-}
-
 func (ps *pipelineStage) start() {
 	ps.Started = true
 	// Inner function
-	// Blocks on read from internalPipe
-	// Defaults on write to ps.out
+	// Blocks on read from ps.inner pipe
+	// Blocks on write to ps.out, timeouts to /dev/null
+	// Delays caused by ps.f latency will cause external producers to bypass
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -92,6 +68,7 @@ func (ps *pipelineStage) start() {
 			case <-exiting:
 				break loop
 			case req := <-ps.in:
+				// nil reqs are to be dropped
 				if req != nil {
 					select {
 					case ps.inner <- req:
@@ -106,6 +83,36 @@ func (ps *pipelineStage) start() {
 			}
 		}
 	}()
+}
+
+func connectPipelineStages(pfirst, psecond pipelineStage) (chan *http.Request, chan *http.Request) {
+
+	if !pfirst.Started {
+		pfirst.start()
+	}
+	if !psecond.Started {
+		psecond.start()
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+	loop:
+		for {
+			select {
+			case <-exiting:
+				break loop
+			case req := <-pfirst.out:
+				select {
+				case psecond.in <- req:
+				default:
+					debug("request lost by pipeline connector")
+				}
+			}
+		}
+	}()
+
+	return pfirst.in, psecond.out
 }
 
 var dummyStage pipelineStage
@@ -129,14 +136,15 @@ loop:
 			debug("ReqFilter Pipeline exiting")
 			break loop
 		case req := <-reqFilterInputQ:
-			if !strings.HasSuffix(req.URL.Host, scope) || req.URL.Host == scope {
+			if !strings.HasSuffix("."+req.URL.Host, scope) || req.URL.Host == scope {
 				continue loop
 			}
-			_, dup := seen[req.URL.String()]
+			_, dup := seen[strings.TrimSpace(req.URL.String())]
 			if dup {
+				//debug("duped ", req.URL.String())
 				continue loop
 			}
-			seen[req.URL.String()] = struct{}{}
+			seen[strings.TrimSpace(req.URL.String())] = struct{}{}
 			select {
 			case pipelineInputQ <- req:
 				/*
@@ -154,9 +162,7 @@ loop:
 }
 
 func scheduleRequest(req *http.Request) {
-	originTimeMutex.Lock()
 	lastTime := originTime[req.URL.Host]
-	originTimeMutex.Unlock()
 	if lastTime == 0 {
 		lastTime = time.Now().Unix()
 	}
@@ -170,10 +176,6 @@ func scheduleRequest(req *http.Request) {
 		for {
 			select {
 			case <-time.After(time.Duration((reqCooldown - (secs - lastTime))) * time.Second):
-				//originTimeMutex.Lock()
-				//if originTime[req.URL.Host] - lastTime < reqCooldown
-				//originTimeMutex.Unlock()
-
 				select {
 				case reqFilterOutputQ <- req:
 					ping()
@@ -189,7 +191,5 @@ func scheduleRequest(req *http.Request) {
 
 		}
 	}()
-	originTimeMutex.Lock()
 	originTime[req.URL.Host] = lastTime + reqCooldown
-	originTimeMutex.Unlock()
 }

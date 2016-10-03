@@ -32,7 +32,7 @@ const banner = `
 
 const workerCount = 50
 const bufferSize = 1000
-const reqCooldown = 5 // secs
+const reqCooldown = 0 // secs
 
 var (
 	infoLog          *log.Logger
@@ -183,21 +183,21 @@ func initSignals() {
 func initWatchdog() {
 	wg.Add(1)
 	go func() {
-		doWork := true
-		for doWork {
+	loop:
+		for {
 			select {
 			case <-activity:
 				//debug("goroutines: ", strconv.Itoa(runtime.NumGoroutine()))
 			case <-exiting:
 				debug("watchdog exiting")
-				doWork = false
+				break loop
 			case <-time.After(time.Second * 300):
 				debug("no activity")
 				//var once sync.Once
 				//once.Do(cleanup)
 				debug("close exiting because of inactivity")
 				broadcastExit("Idle Timeout")
-				doWork = false
+				break loop
 			}
 		}
 		wg.Done()

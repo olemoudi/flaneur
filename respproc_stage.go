@@ -2,10 +2,11 @@ package main
 
 import (
 	"net/http"
-	"strings"
+	"path"
+	"regexp"
 	"time"
 
-	"golang.org/x/net/html"
+	"github.com/PuerkitoBio/goquery"
 )
 
 const extractorCount = 10
@@ -14,15 +15,17 @@ func responseProcessor(id int) {
 	defer wg.Done()
 	for i := 1; i <= extractorCount; i++ {
 		wg.Add(1)
-		go extractLinks()
+		go linkExtractor()
 	}
+
+	// TODO: can we remove all this?
 loop:
 	for {
 		select {
 		case <-exiting:
 			debug("processor exiting")
 			break loop
-		case <-time.After(time.Second * 5):
+		case <-time.After(time.Second * 500):
 			//ping()
 			continue loop // TODO: here goes the fan out
 
@@ -31,7 +34,7 @@ loop:
 	return
 }
 
-func extractLinks() {
+func linkExtractor() {
 	defer wg.Done()
 loop:
 	for {
@@ -41,28 +44,65 @@ loop:
 			break loop
 		case resp := <-downloadOutputQ:
 			ping()
-			extractLinksF(resp)
+			parseHTML(resp)
+			//regexResponse(resp)
+
 		}
 	}
 	return
 
 }
 
-func extractLinksF(resp *http.Response) {
+func parseHTML(resp *http.Response) {
 	debug("extracting links")
-	/*
-		req, err := http.NewRequest("GET", "http://localhost:8000", nil)
+
+	doc, err := goquery.NewDocumentFromResponse(resp)
+	if err != nil {
+		debug("error creating goquery document")
+		return
+	}
+	defaultScheme := resp.Request.URL.Scheme
+	defaultAuthority := resp.Request.URL.Host
+	defaultPath := path.Dir(resp.Request.URL.EscapedPath()) + "/"
+
+	// use CSS selector found with the browser inspector
+	// for each, use index and item
+	doc.Find("body a").Each(func(index int, item *goquery.Selection) {
+		linkTag := item
+		link, _ := linkTag.Attr("href")
+
+		link = getFullLink(link, defaultScheme, defaultAuthority, defaultPath)
+		//debug(link)
+		req, err := http.NewRequest("GET", link, nil)
 		if err == nil {
 			select {
 			case reqFilterInputQ <- req:
 			default:
-				//case <-time.After(time.Millisecond * 0.5):
-				//debug("link lost")
 			}
 		}
-		/*for i := 1; i <= 1; i++ {
-			*output <- resp.Request.URL.String()
-		}*/
+	})
+}
+
+var fullLink = regexp.MustCompile("(?i)^https?://.*$")
+var inheritScheme = regexp.MustCompile("^//.*$")
+var absoluteLink = regexp.MustCompile("^/[^/].*$")
+var relativeLink = regexp.MustCompile("^[^/].*$")
+
+func getFullLink(link string, defaultScheme string, defaultAuthority string, defaultPath string) string {
+	switch {
+	case fullLink.MatchString(link):
+		return link
+	case inheritScheme.MatchString(link):
+		return defaultScheme + "://" + link + url
+	case absoluteLink.MatchString(link):
+		return defaultScheme + "://" + defaultAuthority + link
+	case relativeLink.MatchString(link):
+		return defaultScheme + "://" + defaultAuthority + defaultPath + link
+	}
+	return link
+}
+
+/*
 
 	z := html.NewTokenizer(resp.Body)
 
@@ -106,6 +146,8 @@ func extractLinksF(resp *http.Response) {
 	}
 }
 
+
+
 // Helper function to pull the href attribute from a Token
 func getHref(t html.Token) (ok bool, href string) {
 	// Iterate over all of the Token's attributes until we find an "href"
@@ -120,3 +162,4 @@ func getHref(t html.Token) (ok bool, href string) {
 	// the function definition
 	return
 }
+*/
