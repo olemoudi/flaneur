@@ -2,27 +2,20 @@ package main
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 )
 
-
-
-var dummyStage pipelineStage
+var pipeline PipelineChain
 
 func reqFilterPipeline(id int) {
 	defer wg.Done()
 
-	dummyStage = pipelineStage{}
-	dummyStage.init("dummy", dummyFilter)
+	var dummyBlock (PipelineChain)
+	dummyBlock = PipelineBlock.New("dummy", dummyFilter)
+	var normalizeBlock (PipelineChain) = PipelineBlock.New("normalize", normalizeURL)
 
-
-
-	pipelineInputQ := dummyStage.in
-	pipelineOutQ := dummyStage.out
-
-	debug("pipeline started", strconv.FormatBool(dummyStage.Started))
+	pipeline := connectPipeline(normalizeBlock, dummyBlock)
 
 loop:
 	for {
@@ -41,7 +34,7 @@ loop:
 			}
 			seen[strings.TrimSpace(req.URL.String())] = struct{}{}
 			select {
-			case pipelineInputQ <- req:
+			case pipeline.Write() <- req:
 				/*
 					case <-time.After(time.Millisecond * 5):
 						debug("req lost by reqFilterPipeline main loop")
@@ -49,7 +42,7 @@ loop:
 				*/
 			}
 
-		case req := <-pipelineOutQ:
+		case req := <-pipeline.Read():
 			scheduleRequest(req)
 		}
 	}

@@ -39,7 +39,7 @@ var (
 	debugLog         *log.Logger
 	debugMode        bool
 	serverMode       bool
-	url              string
+	starturl         string
 	scope            string
 	activity         chan struct{}
 	exiting          chan struct{}
@@ -55,7 +55,7 @@ var (
 
 func main() {
 	fmt.Println(banner)
-	flag.StringVar(&url, "u", "", "Base URL")
+	flag.StringVar(&starturl, "u", "", "Base URL")
 	flag.BoolVar(&debugMode, "debug", false, "log additional debug traces")
 	flag.BoolVar(&serverMode, "server", false, "launch testing server")
 
@@ -69,7 +69,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if url == "" {
+	if starturl == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -120,12 +120,12 @@ func main() {
 	// launch response processors
 
 	// seed start URL
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequest("GET", starturl, nil)
 	tokens := strings.Split(req.URL.Host, ".")
 	scope = "." + strings.Join(tokens[len(tokens)-2:], ".")
 	<-time.After(time.Second)
 	for i := 1; i <= workerCount; i++ {
-		req, _ := http.NewRequest("GET", url, nil)
+		req, _ := http.NewRequest("GET", starturl, nil)
 		reqFilterInputQ <- req
 	}
 
