@@ -88,18 +88,18 @@ var inheritScheme = regexp.MustCompile("^//.*$")
 var absoluteLink = regexp.MustCompile("^/[^/].*$")
 var relativeLink = regexp.MustCompile("^[^/].*$")
 
-func getFullLink(link string, defaultScheme string, defaultAuthority string, defaultPath string) string {
+func getFullLink(href string, defaultScheme string, defaultAuthority string, defaultPath string) string {
 	switch {
-	case fullLink.MatchString(link):
-		return link
-	case inheritScheme.MatchString(link):
-		return defaultScheme + "://" + link + url
-	case absoluteLink.MatchString(link):
-		return defaultScheme + "://" + defaultAuthority + link
-	case relativeLink.MatchString(link):
-		return defaultScheme + "://" + defaultAuthority + defaultPath + link
+	case fullLink.MatchString(href):
+		return href
+	case inheritScheme.MatchString(href):
+		return defaultScheme + "://" + href
+	case absoluteLink.MatchString(href):
+		return defaultScheme + "://" + defaultAuthority + href
+	case relativeLink.MatchString(href):
+		return defaultScheme + "://" + defaultAuthority + defaultPath + href
 	}
-	return link
+	return href
 }
 
 /*

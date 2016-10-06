@@ -32,7 +32,7 @@ const banner = `
 
 const workerCount = 50
 const bufferSize = 1000
-const reqCooldown = 0 // secs
+const reqCooldown = 2 // secs
 
 var (
 	infoLog          *log.Logger

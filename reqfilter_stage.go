@@ -6,14 +6,11 @@ import (
 	"time"
 )
 
-var pipeline PipelineChain
-
 func reqFilterPipeline(id int) {
 	defer wg.Done()
 
-	var dummyBlock (PipelineChain)
-	dummyBlock = PipelineBlock.New("dummy", dummyFilter)
-	var normalizeBlock (PipelineChain) = PipelineBlock.New("normalize", normalizeURL)
+	dummyBlock := NewPipeline("dummy", dummyFilter)
+	normalizeBlock := NewPipeline("normalize", normalizeURL)
 
 	pipeline := connectPipeline(normalizeBlock, dummyBlock)
 

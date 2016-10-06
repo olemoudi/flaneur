@@ -8,12 +8,7 @@ import (
 type Pipeline interface {
 	Read() chan *http.Request
 	Write() chan *http.Request
-}
-
-type PipelineChain struct {
-	In   chan *http.Request
-	Out  chan *http.Request
-	Name string
+	Name() string
 }
 
 type PipelineBlock struct {
@@ -22,32 +17,40 @@ type PipelineBlock struct {
 			  |                    ^
 			  -------->------------
 	*/
-	PipelineChain
+	In      chan *http.Request
+	Out     chan *http.Request
+	name    string
 	inner   chan *http.Request
 	F       func(*http.Request) *http.Request
 	Started bool
 }
 
-func (p PipelineBlock) New(name string, f func(*http.Request) *http.Request) PipelineBlock {
+func NewPipeline(name string, f func(*http.Request) *http.Request) Pipeline {
+	p := PipelineBlock{}
+
 	p.In = make(chan *http.Request, 100)
 	p.Out = make(chan *http.Request, 100)
 	p.inner = make(chan *http.Request, 100)
-	p.Name = name
+	p.name = name
 	p.F = f
 	p.Started = false
-	p.Start()
+	p.start()
 	return p
 }
 
-func (pc *PipelineChain) Read() chan *http.Request {
-	return pc.Out
+func (pb PipelineBlock) Read() chan *http.Request {
+	return pb.Out
 }
 
-func (pc *PipelineChain) Write() chan *http.Request {
-	return pc.In
+func (pb PipelineBlock) Write() chan *http.Request {
+	return pb.In
 }
 
-func (pb *PipelineBlock) Start() {
+func (pb PipelineBlock) Name() string {
+	return pb.name
+}
+
+func (pb *PipelineBlock) start() {
 	if !pb.Started {
 		pb.Started = true
 		// Inner function
@@ -104,7 +107,7 @@ func (pb *PipelineBlock) Start() {
 	}
 }
 
-func connectPipeline(pfirst, psecond PipelineChain) (chain PipelineChain) {
+func connectPipeline(pfirst, psecond Pipeline) (chain Pipeline) {
 
 	wg.Add(1)
 	go func() {
@@ -126,5 +129,6 @@ func connectPipeline(pfirst, psecond PipelineChain) (chain PipelineChain) {
 		}
 	}()
 
-	return PipelineChain{In: pfirst.Write(), Out: psecond.Read(), Name: pfirst.Name + " | " + psecond.Name}
+	return PipelineBlock{In: pfirst.Write(), Out: psecond.Read(), name: pfirst.Name() + " | " + psecond.Name()}
+
 }

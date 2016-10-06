@@ -18,6 +18,9 @@ func normalizeURL(r *http.Request) *http.Request {
 		debug("Error parsing normalized URL", normalized)
 		newurl = nil
 	}
+	if r.URL.String() != newurl.String() {
+		debug("normalize:", r.URL.String(), "to", newurl.String())
+	}
 	req, err := http.NewRequest("GET", newurl.String(), nil)
 	if err != nil {
 		return nil
