@@ -5,6 +5,7 @@ import (
 	"net/url"
 
 	"github.com/PuerkitoBio/purell"
+	"github.com/willf/bloom"
 )
 
 func dummyFilter(req *http.Request) *http.Request {
@@ -18,12 +19,29 @@ func normalizeURL(r *http.Request) *http.Request {
 		debug("Error parsing normalized URL", normalized)
 		newurl = nil
 	}
-	if r.URL.String() != newurl.String() {
-		debug("normalize:", r.URL.String(), "to", newurl.String())
-	}
+	//	if r.URL.String() != newurl.String() {
+	//		debug("normalize:", r.URL.String(), "to", newurl.String())
+	//	}
 	req, err := http.NewRequest("GET", newurl.String(), nil)
 	if err != nil {
 		return nil
 	}
 	return req
+}
+
+//var bfilter BloomFilter
+var bfilter *bloom.BloomFilter = bloom.New(80000000, 5)
+
+func urlSeen(r *http.Request) *http.Request {
+	if bfilter.Test([]byte(r.URL.String())) {
+		return nil
+	}
+	bfilter.Add([]byte(r.URL.String()))
+	return r
+	/*
+		_, dup := seen[strings.TrimSpace(r.URL.String())]
+		if dup {
+			return nil
+		}
+		seen[strings.TrimSpace(r.URL.String())] = struct{}{}*/
 }

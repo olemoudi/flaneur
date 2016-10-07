@@ -32,7 +32,7 @@ const banner = `
 
 const workerCount = 50
 const bufferSize = 1000
-const reqCooldown = 2 // secs
+const reqCooldown = 5 // secs
 
 var (
 	infoLog          *log.Logger
@@ -107,8 +107,12 @@ func main() {
 		go httpClient(id)
 	}
 	// Response Processing Stage
-	wg.Add(1)
-	go responseProcessor(1)
+	for i := 1; i <= extractorCount; i++ {
+		wg.Add(1)
+		go linkExtractor()
+	}
+	//wg.Add(1)
+	//go responseProcessor(1)
 
 	// out queue
 
@@ -122,7 +126,7 @@ func main() {
 	// seed start URL
 	req, _ := http.NewRequest("GET", starturl, nil)
 	tokens := strings.Split(req.URL.Host, ".")
-	scope = "." + strings.Join(tokens[len(tokens)-2:], ".")
+	scope = strings.Join(tokens[len(tokens)-2:], ".")
 	<-time.After(time.Second)
 	for i := 1; i <= workerCount; i++ {
 		req, _ := http.NewRequest("GET", starturl, nil)

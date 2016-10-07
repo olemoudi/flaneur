@@ -2,15 +2,17 @@ package main
 
 import (
 	"net/http"
+	"net/url"
 	"path"
 	"regexp"
-	"time"
+	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 )
 
 const extractorCount = 10
 
+/*
 func responseProcessor(id int) {
 	defer wg.Done()
 	for i := 1; i <= extractorCount; i++ {
@@ -19,20 +21,23 @@ func responseProcessor(id int) {
 	}
 
 	// TODO: can we remove all this?
-loop:
-	for {
-		select {
-		case <-exiting:
-			debug("processor exiting")
-			break loop
-		case <-time.After(time.Second * 500):
-			//ping()
-			continue loop // TODO: here goes the fan out
+	/*
+		loop:
+			for {
+				select {
+				case <-exiting:
+					debug("processor exiting")
+					break loop
+				case <-time.After(time.Second * 500):
+					//ping()
+					continue loop // TODO: here goes the fan out
 
-		}
-	}
+				}
+			}
+
 	return
 }
+*/
 
 func linkExtractor() {
 	defer wg.Done()
@@ -46,7 +51,6 @@ loop:
 			ping()
 			parseHTML(resp)
 			//regexResponse(resp)
-
 		}
 	}
 	return
@@ -73,14 +77,29 @@ func parseHTML(resp *http.Response) {
 
 		link = getFullLink(link, defaultScheme, defaultAuthority, defaultPath)
 		//debug(link)
-		req, err := http.NewRequest("GET", link, nil)
-		if err == nil {
-			select {
-			case reqFilterInputQ <- req:
-			default:
+		if isScoped(link) {
+			req, err := http.NewRequest("GET", link, nil)
+			if err == nil {
+				select {
+				case reqFilterInputQ <- req:
+					//default:
+				}
 			}
 		}
 	})
+}
+
+func isScoped(link string) bool {
+	//debug("scope", scope)
+	//debug("link", link)
+	u, err := url.Parse(link)
+	if err != nil {
+		return false
+	}
+	if u.Host != scope && !strings.HasSuffix(u.Host, "."+scope) {
+		return false
+	}
+	return true
 }
 
 var fullLink = regexp.MustCompile("(?i)^https?://.*$")

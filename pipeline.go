@@ -28,9 +28,9 @@ type PipelineBlock struct {
 func NewPipeline(name string, f func(*http.Request) *http.Request) Pipeline {
 	p := PipelineBlock{}
 
-	p.In = make(chan *http.Request, 100)
-	p.Out = make(chan *http.Request, 100)
-	p.inner = make(chan *http.Request, 100)
+	p.In = make(chan *http.Request, 1000)
+	p.Out = make(chan *http.Request, 1000)
+	p.inner = make(chan *http.Request, 1000)
 	p.name = name
 	p.F = f
 	p.Started = false
@@ -122,8 +122,9 @@ func connectPipeline(pfirst, psecond Pipeline) (chain Pipeline) {
 			case req := <-pfirst.Read():
 				select {
 				case psecond.Write() <- req:
+					debug("request queued to pipeline connector", psecond.Name())
 				default:
-					debug("request lost by pipeline connector")
+					debug("request lost by pipeline connector", psecond.Name())
 				}
 			}
 		}

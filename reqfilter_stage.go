@@ -2,17 +2,20 @@ package main
 
 import (
 	"net/http"
-	"strings"
 	"time"
 )
+
+var pipeline Pipeline
 
 func reqFilterPipeline(id int) {
 	defer wg.Done()
 
 	dummyBlock := NewPipeline("dummy", dummyFilter)
 	normalizeBlock := NewPipeline("normalize", normalizeURL)
+	urlseenBlock := NewPipeline("urlseen", urlSeen)
 
-	pipeline := connectPipeline(normalizeBlock, dummyBlock)
+	pipeline = connectPipeline(dummyBlock, normalizeBlock)
+	pipeline = connectPipeline(pipeline, urlseenBlock)
 
 loop:
 	for {
@@ -21,26 +24,13 @@ loop:
 			debug("ReqFilter Pipeline exiting")
 			break loop
 		case req := <-reqFilterInputQ:
-			if !strings.HasSuffix("."+req.URL.Host, scope) || req.URL.Host == scope {
-				continue loop
-			}
-			_, dup := seen[strings.TrimSpace(req.URL.String())]
-			if dup {
-				//debug("duped ", req.URL.String())
-				continue loop
-			}
-			seen[strings.TrimSpace(req.URL.String())] = struct{}{}
-			select {
-			case pipeline.Write() <- req:
-				/*
-					case <-time.After(time.Millisecond * 5):
-						debug("req lost by reqFilterPipeline main loop")
-					default:
-				*/
-			}
-
+			ping()
+			pipeline.Write() <- req
 		case req := <-pipeline.Read():
-			scheduleRequest(req)
+			ping()
+			if req != nil {
+				scheduleRequest(req)
+			}
 		}
 	}
 	return
@@ -49,18 +39,19 @@ loop:
 func scheduleRequest(req *http.Request) {
 	lastTime := originTime[req.URL.Host]
 	if lastTime == 0 {
-		lastTime = time.Now().Unix()
+		lastTime = time.Now().Unix() - reqCooldown
 	}
 	now := time.Now()
 	secs := now.Unix()
 
+	delay := reqCooldown - (secs - lastTime)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 	loop:
 		for {
 			select {
-			case <-time.After(time.Duration((reqCooldown - (secs - lastTime))) * time.Second):
+			case <-time.After(time.Duration(delay) * time.Second):
 				select {
 				case reqFilterOutputQ <- req:
 					ping()
