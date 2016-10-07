@@ -5,7 +5,6 @@ import (
 	"net/url"
 
 	"github.com/PuerkitoBio/purell"
-	"github.com/willf/bloom"
 )
 
 func dummyFilter(req *http.Request) *http.Request {
@@ -30,13 +29,12 @@ func normalizeURL(r *http.Request) *http.Request {
 }
 
 //var bfilter BloomFilter
-var bfilter *bloom.BloomFilter = bloom.New(80000000, 5)
+//var bfilter *bloom.BloomFilter = bloom.New(80000000, 5)
 
 func urlSeen(r *http.Request) *http.Request {
-	if bfilter.Test([]byte(r.URL.String())) {
+	if bfilter.TestAndAddString(r.URL.String()) {
 		return nil
 	}
-	bfilter.Add([]byte(r.URL.String()))
 	return r
 	/*
 		_, dup := seen[strings.TrimSpace(r.URL.String())]

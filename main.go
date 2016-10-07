@@ -5,8 +5,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/willf/bloom"
 	//"fmt"
 	"log"
 	"os"
@@ -32,7 +36,7 @@ const banner = `
 
 const workerCount = 50
 const bufferSize = 1000
-const reqCooldown = 5 // secs
+const reqCooldown = 1 // secs
 
 var (
 	infoLog          *log.Logger
@@ -51,6 +55,7 @@ var (
 	originTime       map[string]int64
 	originTimeMutex  *sync.Mutex
 	seen             map[string]interface{}
+	bfilter          *bloom.BloomFilter
 )
 
 func main() {
@@ -87,6 +92,10 @@ func main() {
 	}
 	originTime = make(map[string]int64)
 	seen = make(map[string]interface{})
+	bfilter = bloom.New(20000000, 5)
+	debug("Bloom filter estimated FP Rate after 1M URLs:", strconv.FormatFloat(bfilter.EstimateFalsePositiveRate(1000000), 'f', -1, 64))
+	<-time.After(time.Second * 4)
+
 	initSignals()
 	initWatchdog()
 
@@ -191,7 +200,7 @@ func initWatchdog() {
 		for {
 			select {
 			case <-activity:
-				//debug("goroutines: ", strconv.Itoa(runtime.NumGoroutine()))
+				debug("goroutines: ", strconv.Itoa(runtime.NumGoroutine()))
 			case <-exiting:
 				debug("watchdog exiting")
 				break loop
