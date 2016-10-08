@@ -4,35 +4,46 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"text/template"
 	"time"
 )
 
 type Context struct {
-	URL string
+	Path string
 }
 
 type Test struct {
-	URL     string
-	start   int64
-	end     int64
-	success bool
-	name    string
+	Path      string
+	Name      string
+	Handler   func(http.ResponseWriter, *http.Request)
+	Validator func(http.ResponseWriter, *http.Request)
 }
 
 func launchServer() {
 	info("launching server at :8000")
-	http.HandleFunc("/", rootHandler)
+	http.HandleFunc("/", globalHandler(rootHandler))
+	//http.HandleFunc("/test/scope", globalHandler(scopeTest))
 	http.ListenAndServe(":8000", nil)
+}
+
+func globalHandler(fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		pt, diff := politenessTest(r)
+		if pt {
+			fmt.Println("Politeness Test failed by", strconv.Itoa(int(diff)))
+		}
+		if dupeTest(r) {
+			fmt.Println("URL visited twice:", r.URL.String())
+		}
+		fn(w, r)
+	}
 }
 
 func rootHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Add("Content-Type", "text/html")
-	result, diff := politenessTest(req)
-	if !result {
-		fmt.Println("politeness failed by", strconv.Itoa(int(diff)))
-	}
+
 	tmpl, err := template.New("name").Parse(rootTemplate)
 	if err == nil {
 		context := Context{"/"}
@@ -57,7 +68,7 @@ var mutex = &sync.Mutex{}
 func politenessTest(req *http.Request) (bool, int64) {
 	mutex.Lock()
 	defer mutex.Unlock()
-	result := true
+	result := false
 	niltime := time.Time{}
 	var diff int64 = 5
 	if timestamp == niltime {
@@ -65,14 +76,26 @@ func politenessTest(req *http.Request) (bool, int64) {
 	} else {
 		diff = time.Now().Unix() - timestamp.Unix()
 		if diff < politeness {
-			result = false
+			result = true
 			timestamp = time.Now()
 		} else {
-			result = true
+			result = false
 		}
 	}
 
 	return result, diff
+}
+
+var seen map[string]interface{} = make(map[string]interface{})
+
+func dupeTest(r *http.Request) bool {
+	u := strings.TrimSpace(r.URL.String())
+	_, dup := seen[u]
+	if dup {
+		return true
+	}
+	seen[u] = struct{}{}
+	return false
 }
 
 const rootTemplate = `

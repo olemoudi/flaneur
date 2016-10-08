@@ -22,21 +22,11 @@ import (
 	"syscall"
 )
 
-const banner = `
-######## ##          ###    ##    ## ######## ##     ## ########
-##       ##         ## ##   ###   ## ##       ##     ## ##     ##
-##       ##        ##   ##  ####  ## ##       ##     ## ##     ##
-######   ##       ##     ## ## ## ## ######   ##     ## ########
-##       ##       ######### ##  #### ##       ##     ## ##   ##
-##       ##       ##     ## ##   ### ##       ##     ## ##    ##
-##       ######## ##     ## ##    ## ########  #######  ##     ##
-
-
-`
-
-const workerCount = 50
+const workerCount = 25
 const bufferSize = 1000
-const reqCooldown = 1 // secs
+const reqCooldown = 6
+const BLOOMSIZE = 20000000 // bits
+const BLOOMHASHES = 5      // no of hashes
 
 var (
 	infoLog          *log.Logger
@@ -54,7 +44,6 @@ var (
 	wg               sync.WaitGroup
 	originTime       map[string]int64
 	originTimeMutex  *sync.Mutex
-	seen             map[string]interface{}
 	bfilter          *bloom.BloomFilter
 )
 
@@ -91,8 +80,7 @@ func main() {
 		Jar:     jar,
 	}
 	originTime = make(map[string]int64)
-	seen = make(map[string]interface{})
-	bfilter = bloom.New(20000000, 5)
+	bfilter = bloom.New(BLOOMSIZE, BLOOMHASHES)
 	debug("Bloom filter estimated FP Rate after 1M URLs:", strconv.FormatFloat(bfilter.EstimateFalsePositiveRate(1000000), 'f', -1, 64))
 	<-time.After(time.Second * 4)
 
