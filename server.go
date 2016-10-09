@@ -23,8 +23,19 @@ type Test struct {
 
 func launchServer() {
 	info("launching server at :8000")
+	// global handler = polite and dupe tests
 	http.HandleFunc("/", globalHandler(rootHandler))
 	//http.HandleFunc("/test/scope", globalHandler(scopeTest))
+	// scope test
+	// relative path
+	// absolute path
+	// full link
+	// protocol agnostic link (://)
+	// weird links
+	// big files
+	// huge files
+	// page with 1000 links
+
 	http.ListenAndServe(":8000", nil)
 }
 
