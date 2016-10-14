@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head lan="en">
+    <meta charset="UTF-8">
+    <title>Root Template</title>
+</head>
+<body>
+    <h1> Flaneur Tests </h1>
+    <ul>
+        {{range tests}}
+        <li>
+            <a href="{{.Path}}">{{.Name}}</a>
+        </li>
+        {{end}}
+    </ul>
+</body>
+</html>

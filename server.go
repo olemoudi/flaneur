@@ -8,35 +8,47 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/gorilla/mux"
 )
 
 type Context struct {
 	Path string
 }
 
-type Test struct {
-	Path      string
-	Name      string
-	Handler   func(http.ResponseWriter, *http.Request)
+type Test interface {
+	Name() string
+	Desc() string
+	Path() string
+	Validate(*http.Request) bool
+}
+
+type TestInstance struct {
+	Path string
+	Name string
+
 	Validator func(http.ResponseWriter, *http.Request)
 }
 
+var Tests map[string]Test
+
 func launchServer() {
+	makeTests()
 	info("launching server at :8000")
 	// global handler = polite and dupe tests
 	http.HandleFunc("/", globalHandler(rootHandler))
-	//http.HandleFunc("/test/scope", globalHandler(scopeTest))
-	// scope test
-	// relative path
-	// absolute path
-	// full link
-	// protocol agnostic link (://)
-	// weird links
-	// big files
-	// huge files
-	// page with 1000 links
+
+	r := mux.NewRouter()
+	r.HandleFunc("/", globalHandler(rootHandler))
+	r.HandleFunc("/tests/{TestID}", globalHandler(TestHandler))
 
 	http.ListenAndServe(":8000", nil)
+}
+
+func makeTests()
+
+func TestHandler(w http.ResponseWriter, req *http.Request) {
+
 }
 
 func globalHandler(fn http.HandlerFunc) http.HandlerFunc {
@@ -55,12 +67,28 @@ func globalHandler(fn http.HandlerFunc) http.HandlerFunc {
 func rootHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Add("Content-Type", "text/html")
 
-	tmpl, err := template.New("name").Parse(rootTemplate)
-	if err == nil {
-		context := Context{"/"}
-		tmpl.Execute(w, context)
+	tmpl := template.Must(template.ParseFiles("html/index.html"))
 
+	context := Context{"/"}
+	tmpl.Execute(w, context)
+
+}
+
+func testHandler(w http.ResponseWriter, req *http.Request) {
+
+}
+
+func getTests() []Test {
+	tests := make([]Test, 0)
+	t := Test{
+		Name:      "DupeTest",
+		Path:      "/tests/DupeTest",
+		Handler:   dupeTestHandler,
+		Validator: nil,
 	}
+	tests = append(tests, t)
+
+	return tests
 }
 
 /*

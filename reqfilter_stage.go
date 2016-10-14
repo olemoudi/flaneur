@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"runtime"
 	"time"
 )
 
@@ -29,7 +30,9 @@ loop:
 		case req := <-pipeline.Read():
 			ping()
 			if req != nil {
-				scheduleRequest(req)
+				if runtime.NumGoroutine() < 50000 {
+					scheduleRequest(req)
+				}
 			}
 		}
 	}

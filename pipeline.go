@@ -122,9 +122,9 @@ func connectPipeline(pfirst, psecond Pipeline) (chain Pipeline) {
 			case req := <-pfirst.Read():
 				select {
 				case psecond.Write() <- req:
-					debug("request queued to pipeline connector", psecond.Name())
+					//debug("request queued to pipeline connector", psecond.Name())
 				default:
-					debug("request lost by pipeline connector", psecond.Name())
+					//debug("request lost by pipeline connector", psecond.Name())
 				}
 			}
 		}
