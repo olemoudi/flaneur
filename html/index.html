@@ -6,10 +6,11 @@
 </head>
 <body>
     <h1> Flaneur Tests </h1>
+    {{ .S}}
     <ul>
-        {{range tests}}
+        {{range $TestId, $Test := .Tests}}
         <li>
-            <a href="{{.Path}}">{{.Name}}</a>
+            <a href="/tests/{{$TestId}}">{{$Test.Desc}}</a>
         </li>
         {{end}}
     </ul>

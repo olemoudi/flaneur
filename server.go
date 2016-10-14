@@ -13,51 +13,54 @@ import (
 )
 
 type Context struct {
-	Path string
+	Tests map[string]Test
+	S     string
 }
 
-type Test interface {
-	Name() string
-	Desc() string
-	Path() string
-	Validate(*http.Request) bool
-}
-
-type TestInstance struct {
-	Path string
-	Name string
-
-	Validator func(http.ResponseWriter, *http.Request)
+type Test struct {
+	Path      string
+	Desc      string
+	Name      string
+	Validator func(*http.Request) bool
 }
 
 var Tests map[string]Test
 
 func launchServer() {
-	makeTests()
+	//	makeTests()
 	info("launching server at :8000")
 	// global handler = polite and dupe tests
-	http.HandleFunc("/", globalHandler(rootHandler))
-
 	r := mux.NewRouter()
 	r.HandleFunc("/", globalHandler(rootHandler))
-	r.HandleFunc("/tests/{TestID}", globalHandler(TestHandler))
+	r.HandleFunc("/tests/{TestID}/{TestPath}", globalHandler(TestHandler))
 
+	http.Handle("/", r)
 	http.ListenAndServe(":8000", nil)
 }
 
-func makeTests()
+//func makeTests()
+
+/*
+vars := mux.Vars(request)
+category := vars["category"]
+*/
 
 func TestHandler(w http.ResponseWriter, req *http.Request) {
-
+	vars := mux.Vars(req)
+	t, prs := Tests[vars["TestID"]]
+	if prs {
+		t.Validator(req)
+	}
 }
 
 func globalHandler(fn http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		pt, diff := politenessTest(r)
-		if pt {
+		w.Header().Add("Content-Type", "text/html")
+		fail, diff := politenessTest(r)
+		if fail {
 			fmt.Println("Politeness Test failed by", strconv.Itoa(int(diff)))
 		}
-		if dupeTest(r) {
+		if dupe(r) {
 			fmt.Println("URL visited twice:", r.URL.String())
 		}
 		fn(w, r)
@@ -65,30 +68,33 @@ func globalHandler(fn http.HandlerFunc) http.HandlerFunc {
 }
 
 func rootHandler(w http.ResponseWriter, req *http.Request) {
-	w.Header().Add("Content-Type", "text/html")
 
 	tmpl := template.Must(template.ParseFiles("html/index.html"))
-
-	context := Context{"/"}
+	m := getTests()
+	context := Context{Tests: m}
 	tmpl.Execute(w, context)
 
 }
 
-func testHandler(w http.ResponseWriter, req *http.Request) {
-
-}
-
-func getTests() []Test {
-	tests := make([]Test, 0)
+func getTests() map[string]Test {
+	ts := make(map[string]Test)
 	t := Test{
 		Name:      "DupeTest",
+		Desc:      "dupe test",
 		Path:      "/tests/DupeTest",
-		Handler:   dupeTestHandler,
-		Validator: nil,
+		Validator: func(r *http.Request) bool { return true },
 	}
-	tests = append(tests, t)
+	ts[t.Name] = t
 
-	return tests
+	t = Test{
+		Name:      "DupeTest2",
+		Desc:      "dupe test2",
+		Path:      "/tests/DupeTest2",
+		Validator: func(r *http.Request) bool { return true },
+	}
+	ts[t.Name] = t
+
+	return ts
 }
 
 /*
@@ -127,7 +133,7 @@ func politenessTest(req *http.Request) (bool, int64) {
 
 var seen map[string]interface{} = make(map[string]interface{})
 
-func dupeTest(r *http.Request) bool {
+func dupe(r *http.Request) bool {
 	u := strings.TrimSpace(r.URL.String())
 	_, dup := seen[u]
 	if dup {
@@ -136,16 +142,3 @@ func dupeTest(r *http.Request) bool {
 	seen[u] = struct{}{}
 	return false
 }
-
-const rootTemplate = `
-<!DOCTYPE html>
-<html>
-<head lan="en">
-    <meta charset="UTF-8">
-    <title>Root Template</title>
-</head>
-<body>
-    <a href="{{.URL}}">link</a>
-</body>
-</html>
-`

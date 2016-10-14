@@ -18,7 +18,6 @@ import (
 	//"github.com/op/go-logging"
 	"net/http"
 	"net/http/cookiejar"
-	"net/url"
 	"os/signal"
 	"syscall"
 )
@@ -76,105 +75,7 @@ func main() {
 	exiting = make(chan struct{})
 	timeout := time.Duration(5 * time.Second)
 	jar, _ := cookiejar.New(nil)
-	var cookies []*http.Cookie
-	cookie := &http.Cookie{
-		Name:   "APISID",
-		Value:  "VWEuMrjPWPRe05Hj/AKEIl1QvHc0zXuTTU",
-		Path:   "/",
-		Domain: ".google.com",
-	}
-	cookies = append(cookies, cookie)
 
-	cookie = &http.Cookie{
-		Name:   "COMPASS",
-		Value:  "gmail=CiMACWuJV4bG2Tg16wy2dnAyLIIC1rxIPFvw7HWW5Fw9oEYc1xC1_vq_BRosAAlriVfuv19SQUJuKINojgOUG9h4ATSdeSk_5vW6v8jcFTS92eS7nqF4T-I",
-		Path:   "/",
-		Domain: "mail.google.com",
-	}
-	cookies = append(cookies, cookie)
-
-	cookie = &http.Cookie{
-		Name:   "CONSENT",
-		Value:  "YES+ES.es+20150628-20-0",
-		Path:   "/",
-		Domain: ".google.com",
-	}
-	cookies = append(cookies, cookie)
-
-	cookie = &http.Cookie{
-		Name:   "GMAIL_AT",
-		Value:  "AF6bupPS6vjzoycx57lN3xqe-lYqeynxTw",
-		Path:   "/",
-		Domain: "mail.google.com",
-	}
-	cookies = append(cookies, cookie)
-
-	cookie = &http.Cookie{
-		Name:   "GMAIL_RTT",
-		Value:  "79",
-		Path:   "/",
-		Domain: ".google.com",
-	}
-	cookies = append(cookies, cookie)
-
-	cookie = &http.Cookie{
-		Name:   "HSID",
-		Value:  "AGfciC6NdVrWeSylN",
-		Path:   "/",
-		Domain: ".google.com",
-	}
-	cookies = append(cookies, cookie)
-
-	cookie = &http.Cookie{
-		Name:   "NID",
-		Value:  "88=5pKjpLNpCJoCKMilQa7I0PRwbOCjiTK2kg2pvdjkVAcXrRrygmWVKXPvu8sguiX4GCsbn9s4nhdxESF8ARelICP4ZF06RZ5ZZ4RvllVL2__ipXhUgzFtsz-xtqT5ZKaE3uf3C9VX5tKeNuqQFegEkkORRiICX6_x7XP4zG3AJ6cU3nwSxxyw927TAPYMklL4zQ",
-		Path:   "/",
-		Domain: ".google.com",
-	}
-	cookies = append(cookies, cookie)
-
-	cookie = &http.Cookie{
-		Name:   "OSID",
-		Value:  "3gOfxCwvFX3aU65u9u3oGhI67D4QtRWH-bWvQl02xwwNK98kP9TtnRsgttHSUjCEHKIm0g.",
-		Path:   "/",
-		Domain: "mail.google.com",
-	}
-	cookies = append(cookies, cookie)
-
-	cookie = &http.Cookie{
-		Name:   "S",
-		Value:  "gmail=TMxbSwZMsj4U7GB3vkqFLH8s1gaA-Ozr",
-		Path:   "/",
-		Domain: "mail.google.com",
-	}
-	cookies = append(cookies, cookie)
-
-	cookie = &http.Cookie{
-		Name:   "SAPISID",
-		Value:  "RG_YHnozvE9Zk4CJ/AkbLSeR-9nCIUBjOf",
-		Path:   "/",
-		Domain: ".google.com",
-	}
-	cookies = append(cookies, cookie)
-
-	cookie = &http.Cookie{
-		Name:   "SID",
-		Value:  "3gOfxMXye5VTY3GE7Y1HzSAltbhHI7juzN5j0l0PrgGtgE6F8skwdDNFb7ntg3lHqBbiKQ.",
-		Path:   "/",
-		Domain: ".google.com",
-	}
-	cookies = append(cookies, cookie)
-
-	cookie = &http.Cookie{
-		Name:   "SSID",
-		Value:  "AYbJ0b-p3b5n8n2Sg",
-		Path:   "/",
-		Domain: ".google.com",
-	}
-	cookies = append(cookies, cookie)
-
-	u, _ := url.Parse("https://mail.google.com")
-	jar.SetCookies(u, cookies)
 	client = &http.Client{
 		Timeout: timeout,
 		Jar:     jar,
