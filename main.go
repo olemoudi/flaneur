@@ -76,9 +76,25 @@ func main() {
 	timeout := time.Duration(5 * time.Second)
 	jar, _ := cookiejar.New(nil)
 
+	//TODO: add redirect policy
 	client = &http.Client{
 		Timeout: timeout,
 		Jar:     jar,
+		// CheckRedirect specifies the policy for handling redirects.
+		// If CheckRedirect is not nil, the client calls it before
+		// following an HTTP redirect. The arguments req and via are
+		// the upcoming request and the requests made already, oldest
+		// first. If CheckRedirect returns an error, the Client's Get
+		// method returns both the previous Response (with its Body
+		// closed) and CheckRedirect's error (wrapped in a url.Error)
+		// instead of issuing the Request req.
+		// As a special case, if CheckRedirect returns ErrUseLastResponse,
+		// then the most recent response is returned with its body
+		// unclosed, along with a nil error.
+		//
+		// If CheckRedirect is nil, the Client uses its default policy,
+		// which is to stop after 10 consecutive requests.
+		//CheckRedirect func(req *Request, via []*Request) error
 	}
 	originTime = make(map[string]int64)
 	bfilter = bloom.New(BLOOMSIZE, BLOOMHASHES)

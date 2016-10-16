@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head lan="en">
+    <meta charset="UTF-8">
+    <title>Root Template</title>
+</head>
+<body>
+    <h1> Dupe Test </h1>
+    <ul>
+        <li><a href="/tests/{{.Name}}">{{$Test.Desc}}</a></li>
+        <li><a href="/tests/{{.Name}}?">{{$Test.Desc}}</a></li>
+        <li><a href="/tests/{{.Name}}#">{{$Test.Desc}}</a></li>
+        <li><a href="/tests/{{.Name}}%20">{{$Test.Desc}}</a></li>
+        <li><a href="/tests/{{.Name}}/">{{$Test.Desc}}</a></li>
+    </ul>
+</body>
+</html>

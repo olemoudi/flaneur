@@ -45,12 +45,20 @@ vars := mux.Vars(request)
 category := vars["category"]
 */
 
-func TestHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	t, prs := Tests[vars["TestID"]]
-	if prs {
-		t.Validator(req)
+func TestHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	t, prs := ts[vars["TestID"]]
+	debug(t.Name)
+	if !prs {
+		http.Redirect(w, r, fmt.Sprintf("/?error=%s", vars["TestID"]), 301)
 	}
+	if !t.Validator(r) {
+		testFailed(r, t)
+	}
+	debug("hola")
+	tmpl := template.Must(template.ParseFiles(fmt.Sprintf("html/%s.html", vars["TestID"])))
+	tmpl.Execute(w, t)
+
 }
 
 func globalHandler(fn http.HandlerFunc) http.HandlerFunc {
@@ -68,21 +76,37 @@ func globalHandler(fn http.HandlerFunc) http.HandlerFunc {
 }
 
 func rootHandler(w http.ResponseWriter, req *http.Request) {
-
 	tmpl := template.Must(template.ParseFiles("html/index.html"))
 	m := getTests()
 	context := Context{Tests: m}
 	tmpl.Execute(w, context)
-
 }
 
 func getTests() map[string]Test {
 	ts := make(map[string]Test)
 	t := Test{
-		Name:      "DupeTest",
-		Desc:      "dupe test",
-		Path:      "/tests/DupeTest",
-		Validator: func(r *http.Request) bool { return true },
+		Name: "DupeTest",
+		Desc: "dupe test",
+		Path: "/tests/DupeTest",
+		Validator: func(r *http.Request) bool {
+			url := r.URL.String()
+			if url == "/tests/DupeTest" {
+				return false
+			}
+			if strings.HasSuffix(url, "?") {
+				return false
+			}
+			if strings.HasSuffix(url, "#") {
+				return false
+			}
+			if strings.HasSuffix(url, "%20") {
+				return false
+			}
+			if strings.HasSuffix(url, "/") {
+				return false
+			}
+			return true
+		},
 	}
 	ts[t.Name] = t
 
@@ -141,4 +165,8 @@ func dupe(r *http.Request) bool {
 	}
 	seen[u] = struct{}{}
 	return false
+}
+
+func testFailed(r *http.Request, t Test) {
+	info(fmt.Sprintf("[%s] TEST FAILED - %s", t.Name, r.URL.String()))
 }
