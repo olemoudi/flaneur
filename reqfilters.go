@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/md5"
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -42,4 +44,14 @@ func urlSeen(r *http.Request) *http.Request {
 			return nil
 		}
 		seen[strings.TrimSpace(r.URL.String())] = struct{}{}*/
+}
+
+func euclidean(r *http.Request) *http.Request {
+	return r
+}
+
+func trimMD5(s string, l int) string {
+	data := []byte(s)
+	res := fmt.Sprintf("%x", md5.Sum(data))
+	return res[:l]
 }

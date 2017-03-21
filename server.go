@@ -24,13 +24,14 @@ type Test struct {
 	Validator func(*http.Request) bool
 }
 
-var Tests map[string]Test
+var ts map[string]Test
 
 func launchServer() {
 	//	makeTests()
 	info("launching server at :8000")
 	// global handler = polite and dupe tests
 	r := mux.NewRouter()
+
 	r.HandleFunc("/", globalHandler(rootHandler))
 	r.HandleFunc("/tests/{TestID}/{TestPath}", globalHandler(TestHandler))
 
