@@ -50,7 +50,7 @@ func euclidean(r *http.Request) *http.Request {
 	return r
 }
 
-func trimMD5(s string, l int) string {
+func MD5Prefix(s string, l int) string {
 	data := []byte(s)
 	res := fmt.Sprintf("%x", md5.Sum(data))
 	return res[:l]

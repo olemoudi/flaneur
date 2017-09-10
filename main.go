@@ -24,9 +24,9 @@ import (
 
 const workerCount = 25
 const bufferSize = 1000
-const reqCooldown = 6
+const reqCooldown = 1
 const BLOOMSIZE = 20000000 // bits
-const BLOOMHASHES = 5      // no of hashes
+const BLOOMHASHES = 4      // no of hashes
 
 var (
 	infoLog          *log.Logger
